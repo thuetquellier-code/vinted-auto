@@ -12,12 +12,7 @@ except Exception:
     pass
 
 client = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url="https://api.groq.com/openai/v1")
-MODELES = [m for m in [
-    os.environ.get("GROQ_MODEL"),
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-    "meta-llama/llama-4-maverick-17b-128e-instruct",
-    "qwen/qwen3.6-27b",
-] if m]
+MODELE = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b").strip()
 DOSSIER = pathlib.Path("photos"); DOSSIER.mkdir(exist_ok=True)
 
 db = sqlite3.connect("annonces.db", check_same_thread=False)
@@ -47,24 +42,19 @@ def analyser(chemins):
     contenu = [{"type": "text", "text": PROMPT}]
     for p in chemins[:MAX_PHOTOS_IA]:
         contenu.append({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + reduire(p)}})
-    erreurs = []
-    for modele in MODELES:
-        try:
-            rep = client.chat.completions.create(
-                model=modele,
-                messages=[{"role": "user", "content": contenu}],
-                temperature=0.4,
-            )
-            texte = rep.choices[0].message.content
-            texte = texte[texte.find("{"): texte.rfind("}") + 1]
-            donnees = json.loads(texte)
-            for c in CHAMPS:
-                donnees.setdefault(c, None)
-            donnees["modele_utilise"] = modele
-            return donnees
-        except Exception as e:
-            erreurs.append(modele + " : " + str(e)[:300])
-    raise RuntimeError(" | ".join(erreurs))
+    rep = client.chat.completions.create(
+        model=MODELE,
+        messages=[{"role": "user", "content": contenu}],
+        temperature=0.4,
+        max_tokens=800,
+        response_format={"type": "json_object"},
+    )
+    texte = rep.choices[0].message.content
+    texte = texte[texte.find("{"): texte.rfind("}") + 1]
+    donnees = json.loads(texte)
+    for c in CHAMPS:
+        donnees.setdefault(c, None)
+    return donnees
 
 def envoyer_brouillon_vinted(donnees, chemins):
     raise NotImplementedError
@@ -111,6 +101,7 @@ async def creer(photos: list[UploadFile] = File(...)):
 def lister():
     lignes = db.execute("SELECT id, donnees, statut FROM annonces").fetchall()
     return [{"id": i, "statut": s, **json.loads(d)} for i, d, s in lignes]
-    import favoris
+
+import favoris
 favoris.demarrer()
 
