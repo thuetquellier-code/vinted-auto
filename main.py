@@ -1,9 +1,10 @@
 import os, json, sqlite3, uuid, pathlib, base64
+from io import BytesIO
+from PIL import Image
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from openai import OpenAI
 
-# Groq (gratuit) via son API compatible OpenAI
 client = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url="https://api.groq.com/openai/v1")
 MODELE = os.environ.get("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 DOSSIER = pathlib.Path("photos"); DOSSIER.mkdir(exist_ok=True)
@@ -21,13 +22,20 @@ prix_conseille en euros, realiste pour la seconde main.
 Si une info n'est pas visible, mets null. Aucun texte en dehors du JSON."""
 
 CHAMPS = ["titre", "description", "categorie", "marque", "taille", "couleur", "matiere", "etat", "prix_conseille"]
-MAX_PHOTOS_IA = 5  # Groq accepte quelques images par requete
+MAX_PHOTOS_IA = 3
+TAILLE_MAX = 768
+
+def reduire(chemin):
+    img = Image.open(chemin).convert("RGB")
+    img.thumbnail((TAILLE_MAX, TAILLE_MAX))
+    tampon = BytesIO()
+    img.save(tampon, format="JPEG", quality=75)
+    return base64.b64encode(tampon.getvalue()).decode()
 
 def analyser(chemins):
     contenu = [{"type": "text", "text": PROMPT}]
     for p in chemins[:MAX_PHOTOS_IA]:
-        b64 = base64.b64encode(p.read_bytes()).decode()
-        contenu.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+        contenu.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{reduire(p)}"}})
     rep = client.chat.completions.create(
         model=MODELE,
         messages=[{"role": "user", "content": contenu}],
@@ -41,24 +49,20 @@ def analyser(chemins):
     return donnees
 
 def envoyer_brouillon_vinted(donnees, chemins):
-    # A brancher sur l'API Vinted que tu auras trouvee.
-    # Les photos sont deja dans l'ordre d'envoi (chemins).
     raise NotImplementedError
 
 app = FastAPI()
 
 @app.get("/", response_class=HTMLResponse)
 def accueil():
-    return """<h2>Nouvelle annonce</h2>
-    <form action='/annonce' method='post' enctype='multipart/form-data'>
-    <input type='file' name='photos' multiple accept='image/*'>
-    <button>Generer</button></form>"""
+    return """ Nouvelle annonce
+    """
 
 @app.post("/annonce")
 async def creer(photos: list[UploadFile] = File(...)):
     aid = uuid.uuid4().hex[:8]
     chemins = []
-    for i, f in enumerate(photos):  # i garde l'ordre d'envoi
+    for i, f in enumerate(photos):
         p = DOSSIER / f"{aid}_{i:02d}.jpg"
         p.write_bytes(await f.read())
         chemins.append(p)
