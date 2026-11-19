@@ -11,8 +11,8 @@ try:
 except Exception:
     pass
 
-client = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url="https://api.groq.com/openai/v1")
-MODELE = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b").strip()
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"].strip())
+MODELE = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
 DOSSIER = pathlib.Path("photos"); DOSSIER.mkdir(exist_ok=True)
 
 db = sqlite3.connect("annonces.db", check_same_thread=False)
@@ -21,21 +21,22 @@ db.execute("CREATE TABLE IF NOT EXISTS annonces (id TEXT PRIMARY KEY, photos TEX
 PROMPT = """Tu es une experte de la vente sur Vinted.
 Analyse les photos de cet article et renvoie UNIQUEMENT un JSON avec :
 titre, description, categorie, marque, taille, couleur, matiere, etat, prix_conseille.
+Lis en priorite les etiquettes visibles (marque, taille, composition). N'invente jamais une marque : si elle n'est pas lisible, mets null.
 Titre : type + marque + detail distinctif + couleur + taille, 60 caracteres max.
 Description : etat, matiere, coupe, mesures si visibles, 3 mots-cles de recherche, ton chaleureux.
 etat parmi : Neuf avec etiquette, Neuf sans etiquette, Tres bon etat, Bon etat, Satisfaisant.
-prix_conseille en euros, realiste pour la seconde main.
-Si une info n'est pas visible, mets null. Aucun texte en dehors du JSON."""
+prix_conseille en euros, realiste pour la seconde main sur Vinted.
+Aucun texte en dehors du JSON."""
 
 CHAMPS = ["titre", "description", "categorie", "marque", "taille", "couleur", "matiere", "etat", "prix_conseille"]
 MAX_PHOTOS_IA = 3
-TAILLE_MAX = 768
+TAILLE_MAX = 1024
 
 def reduire(chemin):
     img = Image.open(chemin).convert("RGB")
     img.thumbnail((TAILLE_MAX, TAILLE_MAX))
     tampon = BytesIO()
-    img.save(tampon, format="JPEG", quality=75)
+    img.save(tampon, format="JPEG", quality=80)
     return base64.b64encode(tampon.getvalue()).decode()
 
 def analyser(chemins):
@@ -45,7 +46,6 @@ def analyser(chemins):
     rep = client.chat.completions.create(
         model=MODELE,
         messages=[{"role": "user", "content": contenu}],
-        temperature=0.4,
         max_tokens=800,
         response_format={"type": "json_object"},
     )
@@ -104,4 +104,3 @@ def lister():
 
 import favoris
 favoris.demarrer()
-
