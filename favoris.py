@@ -2,7 +2,7 @@ import os, time, sqlite3, threading, random
 
 MESSAGE = os.environ.get("MESSAGE_FAVORI", "Bonjour ! Merci pour le favori, n'hesite pas si tu as une question :)")
 INTERVALLE = 600
-MAX_PAR_HEURE = 20
+MAX_PAR_HEURE = 60
 
 db = sqlite3.connect("favoris.db", check_same_thread=False)
 db.execute("CREATE TABLE IF NOT EXISTS envoyes (utilisateur TEXT, article TEXT, date REAL, PRIMARY KEY (utilisateur, article))")
