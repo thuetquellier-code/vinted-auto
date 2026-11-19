@@ -111,3 +111,6 @@ async def creer(photos: list[UploadFile] = File(...)):
 def lister():
     lignes = db.execute("SELECT id, donnees, statut FROM annonces").fetchall()
     return [{"id": i, "statut": s, **json.loads(d)} for i, d, s in lignes]
+    import favoris
+favoris.demarrer()
+
