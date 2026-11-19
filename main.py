@@ -1,11 +1,11 @@
-import os, json, sqlite3, uuid, pathlib
+import os, json, sqlite3, uuid, pathlib, base64
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-MODELE = "gemini-2.5-flash"
+# Groq (gratuit) via son API compatible OpenAI
+client = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url="https://api.groq.com/openai/v1")
+MODELE = os.environ.get("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 DOSSIER = pathlib.Path("photos"); DOSSIER.mkdir(exist_ok=True)
 
 db = sqlite3.connect("annonces.db", check_same_thread=False)
@@ -18,18 +18,24 @@ Titre : type + marque + detail distinctif + couleur + taille, 60 caracteres max.
 Description : etat, matiere, coupe, mesures si visibles, 3 mots-cles de recherche, ton chaleureux.
 etat parmi : Neuf avec etiquette, Neuf sans etiquette, Tres bon etat, Bon etat, Satisfaisant.
 prix_conseille en euros, realiste pour la seconde main.
-Si une info n'est pas visible, mets null."""
+Si une info n'est pas visible, mets null. Aucun texte en dehors du JSON."""
 
 CHAMPS = ["titre", "description", "categorie", "marque", "taille", "couleur", "matiere", "etat", "prix_conseille"]
+MAX_PHOTOS_IA = 5  # Groq accepte quelques images par requete
 
 def analyser(chemins):
-    parties = [types.Part.from_bytes(data=p.read_bytes(), mime_type="image/jpeg") for p in chemins]
-    rep = client.models.generate_content(
+    contenu = [{"type": "text", "text": PROMPT}]
+    for p in chemins[:MAX_PHOTOS_IA]:
+        b64 = base64.b64encode(p.read_bytes()).decode()
+        contenu.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+    rep = client.chat.completions.create(
         model=MODELE,
-        contents=parties + [PROMPT],
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
+        messages=[{"role": "user", "content": contenu}],
+        temperature=0.4,
     )
-    donnees = json.loads(rep.text)
+    texte = rep.choices[0].message.content
+    texte = texte[texte.find("{"): texte.rfind("}") + 1]
+    donnees = json.loads(texte)
     for c in CHAMPS:
         donnees.setdefault(c, None)
     return donnees
