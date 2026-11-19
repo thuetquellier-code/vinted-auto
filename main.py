@@ -35,7 +35,7 @@ def reduire(chemin):
 def analyser(chemins):
     contenu = [{"type": "text", "text": PROMPT}]
     for p in chemins[:MAX_PHOTOS_IA]:
-        contenu.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{reduire(p)}"}})
+        contenu.append({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + reduire(p)}})
     rep = client.chat.completions.create(
         model=MODELE,
         messages=[{"role": "user", "content": contenu}],
@@ -51,19 +51,27 @@ def analyser(chemins):
 def envoyer_brouillon_vinted(donnees, chemins):
     raise NotImplementedError
 
+def balise(t):
+    return "<" + t + ">"
+
 app = FastAPI()
 
 @app.get("/", response_class=HTMLResponse)
 def accueil():
-    return """ Nouvelle annonce
-    """
+    return (
+        balise("h2") + "Nouvelle annonce" + balise("/h2")
+        + balise("form action='/annonce' method='post' enctype='multipart/form-data'")
+        + balise("input type='file' name='photos' multiple accept='image/*'")
+        + balise("button") + "Generer" + balise("/button")
+        + balise("/form")
+    )
 
 @app.post("/annonce")
 async def creer(photos: list[UploadFile] = File(...)):
     aid = uuid.uuid4().hex[:8]
     chemins = []
     for i, f in enumerate(photos):
-        p = DOSSIER / f"{aid}_{i:02d}.jpg"
+        p = DOSSIER / (aid + "_" + str(i).zfill(2) + ".jpg")
         p.write_bytes(await f.read())
         chemins.append(p)
     donnees = analyser(chemins)
