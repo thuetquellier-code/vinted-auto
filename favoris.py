@@ -15,11 +15,9 @@ db = sqlite3.connect("favoris.db", check_same_thread=False)
 db.execute("CREATE TABLE IF NOT EXISTS envoyes (utilisateur TEXT, article TEXT, date REAL, PRIMARY KEY (utilisateur, article))")
 
 def recuperer_favoris():
-    # A brancher sur ton API Vinted : renvoie [{"utilisateur": "id", "article": "id"}, ...]
     raise NotImplementedError
 
 def envoyer_message(utilisateur, article, texte):
-    # A brancher sur ton API Vinted.
     raise NotImplementedError
 
 def deja_envoye(u, a):
@@ -52,4 +50,3 @@ def boucle():
 
 def demarrer():
     threading.Thread(target=boucle, daemon=True).start()
-
